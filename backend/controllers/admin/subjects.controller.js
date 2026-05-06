@@ -32,7 +32,11 @@ export const createSubject = async (req, res) => {
 //GET
 export const getSubjects = async (req, res) => {
   try {
-    const subjects = await Subject.find().populate('stream');
+    let query = {};
+    if (req.query.streamId) {
+      query.stream = req.query.streamId;
+    }
+    const subjects = await Subject.find(query).populate('stream');
     res.status(200).json(subjects);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -63,7 +67,7 @@ export const updateSubject = async (req, res) => {
       },
       select: 'name'
     });
-    
+
     if (!newSubject) return res.status(404).json({ message: "Subject not found" });
 
     // Log activity

@@ -9,8 +9,8 @@ app = FastAPI(title="Timetable Scheduler (OR-Tools)")
 class SubjectIn(BaseModel):
     name: str
     code: str = Field(..., min_length=1, max_length=5, description="A unique code for the subject (1-5 characters).")
-    credit: int = Field(..., ge=0, le=3, description="Number of theory classes per week (0-3).")
-    lab: int = Field(0, ge=0, le=3, description="Number of 2-period lab blocks per week (0-3).")
+    credit: int = Field(..., ge=0, le=10, description="Number of theory classes per week (0-10).")
+    lab: int = Field(0, ge=0, le=10, description="Number of 2-period lab blocks per week (0-10).")
 
 class SubjectAssignment(BaseModel):
     subjectName: str
@@ -53,8 +53,9 @@ def schedule(payload: Payload):
         raise HTTPException(status_code=400, detail="sectionsCount must be between 1 and 6.")
     if not (8 <= payload.periodsPerDay <= 12):
         raise HTTPException(status_code=400, detail="periodsPerDay must be between 8 and 12.")
-    if not (4 <= len(payload.subjects) <= 6):
-        raise HTTPException(status_code=400, detail="The number of subjects must be between 4 and 6.")
+    # Removed subject count limit - now allows any number >= 1
+    if len(payload.subjects) < 1:
+        raise HTTPException(status_code=400, detail="At least one subject is required.")
     
     # New validation: ensure every subject in every section has a faculty member assigned.
     sections_list = section_names(payload.sectionsCount)
@@ -77,12 +78,6 @@ def schedule(payload: Payload):
                 )
                 if not is_lab_covered:
                     raise HTTPException(status_code=400, detail=f"Lab for subject '{s.name}' has no faculty assigned for Section '{sec}'.")
-
-    # Validation: ensure no faculty teaches more than 2 unique subjects.
-    for f in payload.faculty:
-        unique_subjects = {assignment.subjectName for assignment in f.assignments if assignment.subjectName}
-        if len(unique_subjects) > 2:
-            raise HTTPException(status_code=400, detail=f"Faculty '{f.name}' cannot teach more than 2 unique subjects. Found {len(unique_subjects)}.")
 
     # Validation: ensure all faculty names are unique (case-insensitive)
     seen_faculty_names = set()

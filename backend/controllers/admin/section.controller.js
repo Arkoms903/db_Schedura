@@ -39,7 +39,7 @@ export const getSections = async (req, res) => {
 
 export const getSectionById = async (req, res) => {
   try {
-    const section = await Section.findById(req.params.id);
+    const section = await Section.findById(req.params.id).populate('stream');
     if (!section) return res.status(404).json({ message: "Not found" });
     res.json(section);
   } catch (error) {
@@ -94,6 +94,35 @@ export const deleteSection = async (req, res) => {
     });
 
     res.json({ message: "Deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Add this to section.controller.js
+export const getAllSections = async (req, res) => {
+  try {
+    const { programId } = req.query;
+
+    // Build filter — if programId provided, filter by it
+    // First we need to find sections whose stream belongs to that program
+    let sections;
+
+    if (programId) {
+      // Populate stream and filter by stream's program
+      sections = await Section.find().populate({
+        path: 'stream',
+        match: { program: programId }, // only streams belonging to this program
+        select: 'name program'
+      });
+
+      // Filter out sections where stream didn't match (populate returns null for non-matching)
+      sections = sections.filter(s => s.stream !== null);
+    } else {
+      sections = await Section.find().populate('stream');
+    }
+
+    res.json(sections);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

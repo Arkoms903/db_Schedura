@@ -6,13 +6,15 @@ import {
   getSectionById,
   updateSection,
   deleteSection,
+  getAllSections,
 } from '../../controllers/admin/section.controller.js';
 
 const router = express.Router();
 
+router.get('/getAllSections', getAllSections);
 router.post('/createSection', createSection);
 router.get('/getSection', getSections);
-router.get('/:id', getSectionById);
+router.get('/getSectionById/:id', getSectionById);
 router.put('/:id', updateSection);
 router.delete('/:id', deleteSection);
 

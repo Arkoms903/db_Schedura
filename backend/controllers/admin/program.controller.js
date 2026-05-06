@@ -35,7 +35,8 @@ export const getPrograms = async (req, res) => {
 
 export const getProgramById = async (req, res) => {
   try {
-    const program = await Program.find(req.params.id).populate('university');
+    const program = await Program.findById(req.params.id).populate('university');
+    if (!program) return res.status(404).json({ message: "Program not found" });
     res.status(200).json(program);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -50,7 +51,7 @@ export const updateProgram = async (req, res) => {
       req.body,
       { new: true }
     ).populate('university', 'name'); // Populate for activity log
-    
+
     if (!newProgram) return res.status(404).json({ message: "Program not found" });
 
     // Log activity

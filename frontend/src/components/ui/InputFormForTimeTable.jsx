@@ -94,8 +94,8 @@ export default function InputFormForTimeTable() {
     setter(copy);
   };
 
-  const minSubjects = 4;
-  const maxSubjects = 6;
+  const minSubjects = 1;
+  const maxSubjects = 20; // Increased to allow more subjects
   const maxPeriodsPerDay = 12;
   const sectionNames = Array.from({ length: sectionsCount }, (_, i) => String.fromCharCode('A'.charCodeAt(0) + i));
 
@@ -116,7 +116,7 @@ export default function InputFormForTimeTable() {
     try {
       // simple validation
       if (sectionsCount < 1 || sectionsCount > 6) throw new Error(`Sections must be 1-6.`);
-      if (subjects.length < minSubjects || subjects.length > maxSubjects) throw new Error(`Please add between 4 and 6 subjects.`);
+      if (subjects.length < minSubjects || subjects.length > maxSubjects) throw new Error(`Please add at least ${minSubjects} subjects and no more than ${maxSubjects}.`);
 
       // --- New Room Assignment Validation ---
       const requiredTheorySections = new Set(sectionNames.filter(sec => subjects.some(s => s.credit > 0)));
@@ -517,7 +517,7 @@ export default function InputFormForTimeTable() {
 
       {/* Subjects Section */}
       <div className="p-4 border border-slate-200 rounded-lg">
-        <h3 className="text-xl font-semibold text-slate-800 mb-4">{`Subjects (${subjects.length} total, min 4, max ${maxSubjects})`}</h3>
+        <h3 className="text-xl font-semibold text-slate-800 mb-4">{`Subjects (${subjects.length} total, min ${minSubjects}, max ${maxSubjects})`}</h3>
         <div className="space-y-4">
           {subjects.map((s, i) => (
             <div key={i} className="p-3 bg-slate-50 rounded-md border">
@@ -784,10 +784,6 @@ export default function InputFormForTimeTable() {
           let canTakeNewAssignment = false;
           for (const s of subjects) {
             if (!s.name) continue;
-
-            const canTeachSubject = uniqueSubjects.size < 2 || uniqueSubjects.has(s.name);
-            if (!canTeachSubject) continue;
-
             for (const secName of sectionNames) {
               const theoryNeededAndAvailable = s.credit > 0 && !assignedSlots.has(`${s.name}-${secName}-theory`);
               const labNeededAndAvailable = s.lab > 0 && !assignedSlots.has(`${s.name}-${secName}-lab`);
@@ -809,7 +805,7 @@ export default function InputFormForTimeTable() {
                 </button>
               </div>
 
-              <h5 className="text-sm font-medium text-slate-600 mb-2 pl-4">Assignments (max 2 unique subjects)</h5>
+              <h5 className="text-sm font-medium text-slate-600 mb-2 pl-4">Assignments</h5>
               <div className="space-y-3 pl-4">
               {f.assignments.map((assign, assignIdx) => (
                 <div key={assignIdx} className="border-l-2 border-slate-200 pl-4">
@@ -831,7 +827,7 @@ export default function InputFormForTimeTable() {
                       {subjects.filter(s => s.name).map(s => {
                         const isAlreadyTaught = uniqueSubjects.has(s.name);
                         const isCurrentlySelected = s.name === assign.subject;
-                        const isDisabledBySubjectLimit = uniqueSubjects.size >= 2 && !isAlreadyTaught;
+                        const isDisabledBySubjectLimit = false;
 
                         let allSectionsUnavailable = true;
                         if (!isDisabledBySubjectLimit) {
@@ -847,8 +843,8 @@ export default function InputFormForTimeTable() {
                           }
                         }
 
-                        const isDisabled = (isDisabledBySubjectLimit || allSectionsUnavailable) && !isCurrentlySelected;
-                        return <option key={s.name} value={s.name} disabled={isDisabled} title={isDisabled ? ((isDisabledBySubjectLimit && !isCurrentlySelected) ? "Faculty already teaches 2 unique subjects." : (allSectionsUnavailable && !isCurrentlySelected) ? "All sections for this subject are already assigned to other faculty." : "") : ""}>{s.name}</option>;
+                        const isDisabled = allSectionsUnavailable && !isCurrentlySelected;
+                        return <option key={s.name} value={s.name} disabled={isDisabled} title={isDisabled ? "No available sections are free for this subject yet." : ""}>{s.name}</option>;
                       })}
                     </select>
                     <select

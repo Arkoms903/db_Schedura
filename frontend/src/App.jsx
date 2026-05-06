@@ -39,8 +39,10 @@ function App() {
             </Link>
           </h1>
           <Routes>
-            <Route path="/input" element={<InputForm />} />
-            <Route path="/timetable" element={<TimeTablePage />} />
+            {/* <Route path="/input" element={<InputForm />} />
+            <Route path="/timetable" element={<TimeTablePage />} /> */}
+            <Route path="/" element={<TimeTablePage />} />
+            <Route path="*" element={<Navigate to="/" />} />
           </Routes>
           <Toaster
             position="top-right"
