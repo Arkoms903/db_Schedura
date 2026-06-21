@@ -1,6 +1,7 @@
 import express from 'express'
 import {
   timetableController,
+  predictFeasibilityController,
   // getTimetables,
   // getTimetableById,
   // deleteTimetable,
@@ -14,6 +15,10 @@ const router = express.Router();
 // POST: Generate new timetable
 // URL: POST /api/v1/timetable/schedule
 router.post("/schedule", timetableController);
+
+// POST: Predict feasibility of timetable (ML model)
+// URL: POST /api/v1/timetable/predict-feasibility
+router.post("/predict-feasibility", predictFeasibilityController);
 
 // GET: Fetch all timetables with optional filters
 // URL: GET /api/v1/timetable/all

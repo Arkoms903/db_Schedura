@@ -3,6 +3,7 @@ import Timetable from '../../models/timetable/timeTable.model.js';
 import mongoose from 'mongoose';
 
 const SCHEDULER_URL = `http://127.0.0.1:8001/schedule`;
+const SCHEDULER_FEASIBILITY_URL = `http://127.0.0.1:8001/predict-feasibility`;
 
 // Generate timetable and save to database
 const timetableController = async (req, res) => {
@@ -241,4 +242,68 @@ const timetableController = async (req, res) => {
   }
 };
 
-export { timetableController };
+// Predict feasibility using ML model
+const predictFeasibilityController = async (req, res) => {
+  try {
+    console.log("📥 Received feasibility prediction request");
+
+    if (!req.body || Object.keys(req.body).length === 0) {
+      return res.status(400).json({ error: "Empty request body" });
+    }
+
+    const {
+      sectionsCount,
+      theoryRooms,
+      labRooms,
+      theoryRoomAssignments,
+      labRoomAssignments,
+      subjects,
+      faculty,
+      periodsPerDay,
+      breakPeriod,
+      workingDays
+    } = req.body;
+
+    const schedulerPayload = {
+      sectionsCount,
+      theoryRooms,
+      labRooms,
+      theoryRoomAssignments,
+      labRoomAssignments,
+      subjects,
+      faculty,
+      periodsPerDay: periodsPerDay || 8,
+      breakPeriod: breakPeriod || 4,
+      workingDays: workingDays || 5
+    };
+
+    console.log("🔄 Forwarding request to Python ML predictor:", SCHEDULER_FEASIBILITY_URL);
+
+    const response = await axios.post(SCHEDULER_FEASIBILITY_URL, schedulerPayload, {
+      timeout: 15000,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    console.log("✅ Python ML predictor responded successfully. Probability:", response.data.feasible_probability);
+    return res.status(200).json(response.data);
+
+  } catch (err) {
+    console.error("❌ Error in predictFeasibilityController:", err.message);
+
+    if (err.response) {
+      return res.status(err.response.status).json({
+        error: "Python predictor returned an error",
+        details: err.response.data
+      });
+    }
+
+    return res.status(500).json({
+      error: "Failed to predict feasibility",
+      details: err.message
+    });
+  }
+};
+
+export { timetableController, predictFeasibilityController };

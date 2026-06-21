@@ -321,6 +321,10 @@ const TimeTablePage = () => {
   // Result
   const [generationData, setGenerationData] = useState(null);
 
+  // Feasibility prediction (ML)
+  const [feasibility, setFeasibility] = useState(null); // { feasible_probability: number } | null
+  const [checkingFeasibility, setCheckingFeasibility] = useState(false);
+
   // UI
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -445,6 +449,63 @@ const TimeTablePage = () => {
     setStep(4);
   };
 
+  // ── Shared payload builder (used by both feasibility check and real generate) ─
+  const buildPayload = () => {
+    const theoryRoomAssignments = [];
+    const labRoomAssignments = [];
+    subjects.forEach((subj, idx) => {
+      sectionNames.forEach(sec => {
+        if (subj.credit > 0) {
+          theoryRoomAssignments.push({
+            subjectName: subj.name,
+            sectionName: sec,
+            roomName: theoryRooms[idx % theoryRooms.length],
+          });
+        }
+        if (subj.lab > 0) {
+          labRoomAssignments.push({
+            subjectName: subj.name,
+            sectionName: sec,
+            roomName: labRooms[idx % labRooms.length],
+          });
+        }
+      });
+    });
+
+    return {
+      sectionsCount,
+      theoryRooms,
+      labRooms,
+      theoryRoomAssignments,
+      labRoomAssignments,
+      subjects,
+      faculty: facultyList,
+      periodsPerDay,
+      breakPeriod,
+      workingDays,
+    };
+  };
+
+  // ── ML feasibility pre-check ────────────────────────────────────────────────
+  const checkFeasibility = async () => {
+    setCheckingFeasibility(true);
+    try {
+      const res = await axios.post(`${BASE}/api/v1/timetable/predict-feasibility`, buildPayload());
+      setFeasibility(res.data); // expects { feasible_probability: number }
+    } catch (err) {
+      setFeasibility(null); // fail silently — this is just a hint, not critical
+    } finally {
+      setCheckingFeasibility(false);
+    }
+  };
+
+  // Run the feasibility check automatically when the user reaches Step 4
+  useEffect(() => {
+    if (step === 4) {
+      checkFeasibility();
+    }
+  }, [step]);
+
   // ── Generate Timetable ─────────────────────────────────────────────────────
   const handleGenerate = async () => {
     setGenerating(true);
@@ -452,53 +513,23 @@ const TimeTablePage = () => {
     try {
       const userId = localStorage.getItem('userId') || '';
 
-      // Build room assignments from subjects × sections
-      const theoryRoomAssignments = [];
-      const labRoomAssignments = [];
-      subjects.forEach((subj, idx) => {
-        sectionNames.forEach(sec => {
-          if (subj.credit > 0) {
-            theoryRoomAssignments.push({
-              subjectName: subj.name,
-              sectionName: sec,
-              roomName: theoryRooms[idx % theoryRooms.length],
-            });
-          }
-          if (subj.lab > 0) {
-            labRoomAssignments.push({
-              subjectName: subj.name,
-              sectionName: sec,
-              roomName: labRooms[idx % labRooms.length],
-            });
-          }
-        });
-      });
-
       const payload = {
         universityId: selectedUniversity._id,
         programId: selectedProgram._id,
         sectionId: selectedSection._id,
         streamId: selectedStream?._id || '',
         userId,
-        sectionsCount,
-        theoryRooms,
-        labRooms,
-        theoryRoomAssignments,
-        labRoomAssignments,
-        subjects,
-        faculty: facultyList,
-        periodsPerDay,
-        breakPeriod,
-        workingDays,
+        ...buildPayload(),
       };
 
       const response = await axios.post(`${BASE}/api/v1/timetable/schedule`, payload);
       setGenerationData(response.data.data);
       setStep(5);
     } catch (err) {
-      const detail = err.response?.data?.details?.detail;
+      const data = err.response?.data;
+      const detail = data?.details?.detail ?? data?.detail ?? data?.error;
       const msg = Array.isArray(detail) ? detail[0]?.msg : detail;
-      setError(msg || err.response?.data?.error || 'Failed to generate timetable. Check all fields and try again.');
+      setError(msg || (err.response ? `Server error (${err.response.status})` : 'Network error — could not reach server'));
     } finally {
       setGenerating(false);
     }
@@ -508,6 +539,7 @@ const TimeTablePage = () => {
     setStep(1); setSelectedUniversity(null); setSelectedProgram(null);
     setSelectedSection(null); setSelectedStream(null);
     setSubjects([]); setFacultyList([]); setGenerationData(null);
+    setFeasibility(null);
     setError(''); setSuccess('');
   };
 
@@ -786,6 +818,36 @@ const TimeTablePage = () => {
           <div className="space-y-6">
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8">
               <h2 className="text-2xl font-bold text-slate-900 mb-6">Review & Generate</h2>
+
+              {/* Feasibility (ML) check banner */}
+              {checkingFeasibility && (
+                <div className="mb-6 p-4 bg-slate-50 border border-slate-200 rounded-xl text-slate-500 text-sm flex items-center gap-2">
+                  <Icon.Spinner /> Checking feasibility...
+                </div>
+              )}
+
+              {!checkingFeasibility && feasibility && (
+                <div className={`mb-6 p-4 rounded-xl border flex items-start gap-3 ${
+                  feasibility.feasible_probability >= 0.7
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                    : feasibility.feasible_probability >= 0.4
+                    ? 'bg-amber-50 border-amber-200 text-amber-700'
+                    : 'bg-red-50 border-red-200 text-red-700'
+                }`}>
+                  <Icon.Alert />
+                  <div>
+                    <p className="font-semibold text-sm">
+                      Feasibility check: {Math.round(feasibility.feasible_probability * 100)}% likely to succeed
+                    </p>
+                    {feasibility.feasible_probability < 0.7 && (
+                      <p className="text-sm mt-0.5">
+                        This configuration looks tight. Consider adding more theory/lab rooms or faculty before
+                        generating — it may take longer or fail.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Summary Cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">

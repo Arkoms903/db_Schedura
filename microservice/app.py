@@ -1,11 +1,14 @@
+import os
+import joblib
+import math
+from typing import List, Dict, Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
-from typing import List, Dict, Optional
 from ortools.sat.python import cp_model
-import math
 
-app = FastAPI(title="Timetable Scheduler (OR-Tools)")
+from feasibility.features import extract_features
 
+# ---------- Input models ----------
 class SubjectIn(BaseModel):
     name: str
     code: str = Field(..., min_length=1, max_length=5, description="A unique code for the subject (1-5 characters).")
@@ -28,7 +31,6 @@ class FacultyIn(BaseModel):
     abbr: str
     assignments: List[SubjectAssignment]
 
-# ---------- Input models ----------
 class Payload(BaseModel):
     sectionsCount: int
     theoryRooms: List[str]     # list of theory room identifiers
@@ -40,6 +42,28 @@ class Payload(BaseModel):
     periodsPerDay: int = 8
     breakPeriod: int = 4       # 1-indexed
     workingDays: int = 5
+
+# ---------- Load model robustly ----------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+model_path = os.path.join(BASE_DIR, "feasibility", "model.pkl")
+
+feasibility_model = None
+try:
+    feasibility_model = joblib.load(model_path)
+except FileNotFoundError:
+    # Gracefully handle missing model (e.g. during training generation)
+    pass
+
+# ---------- FastAPI app initialization ----------
+app = FastAPI(title="Timetable Scheduler (OR-Tools)")
+
+@app.post("/predict-feasibility")
+def predict_feasibility(payload: Payload):
+    if feasibility_model is None:
+        raise HTTPException(status_code=503, detail="Feasibility model is not loaded/trained yet.")
+    features = extract_features(payload.dict())
+    proba = feasibility_model.predict_proba([features])[0][1]  # probability of feasible
+    return {"feasible_probability": round(proba, 2)}
 
 # ---------- Helper ----------
 def section_names(n):
